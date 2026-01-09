@@ -265,7 +265,7 @@ def main(args):
             --flush-cache \
             --seed 123 \
             --sharegpt-output-len {args.output_len} \
-            --num-prompts 1
+            --num-prompts {args.batch_size}
         """.format(args=args, port=port)
         result = subprocess.run(command, shell=True, capture_output=True, text=True)
         print(result.stdout)
