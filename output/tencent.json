@@ -1,0 +1,10 @@
+[
+    {
+        "tpot (ms)": "6.80",
+        "ttft (ms)": "54.52",
+        "input_throughput (tok/s)": "32.57",
+        "output_throughput (tok/s)": "145.85",
+        "total_throughput (tok/s)": "178.43",
+        "QPM (req/min)": 7.199999999999999
+    }
+]

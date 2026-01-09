@@ -14,6 +14,8 @@ python3 main.py --model /nfs/FM/gongoubo/checkpoints/Qwen/Qwen3-30B-A3B-Instruct
 
 
 python3 main.py --model /nfs/FM/gongoubo/checkpoints/Qwen/Qwen3-30B-A3B-Instruct-2507 --base_url http://192.168.16.21:18000 --eval_type decode --eval_method ali --decode_gpu_num 1 --deploy_log /nfs/FM/gongoubo/new_project/workflow/deepseek_bench/logs/test.log --output_path /nfs/FM/gongoubo/new_project/workflow/deepseek_bench/output/ali_decode.json
+
+python3 main.py --model /nfs/FM/gongoubo/checkpoints/Qwen/Qwen3-30B-A3B-Instruct-2507 --base_url http://192.168.16.21:18000  --eval_method tencent --output_path /nfs/FM/gongoubo/new_project/workflow/deepseek_bench/output/tencent.json --dataset_path /nfs/FM/gongoubo/new_project/workflow/deepseek_bench/data/sharegpt_normal_distribution_3000.json --output_len 1200 --batch_size 3000
 """
 
 
@@ -247,6 +249,9 @@ def main(args):
 
     elif args.eval_method == "tencent":
         print("tencent")
+
+        metrics = {}
+
         # 腾讯的暂时不设置了
         command = """
         python3 -m sglang.bench_serving \
@@ -258,13 +263,70 @@ def main(args):
             --dataset-path {args.dataset_path} \
             --request-rate inf \
             --flush-cache \
-            --seed 123
+            --seed 123 \
+            --sharegpt-output-len {args.output_len} \
+            --num-prompts 1
         """.format(args=args, port=port)
+        result = subprocess.run(command, shell=True, capture_output=True, text=True)
+        print(result.stdout)
 
+        # 保存评估指标
+        # TPOT
+        pattern = r"Mean TPOT \(ms\):\s+([\d.]+)"
+        match = re.search(pattern, result.stdout)
+
+        if match:
+            tpot = match.group(1)
+
+        # TTFT
+        pattern = r"Mean TTFT \(ms\):\s+([\d.]+)"
+        match = re.search(pattern, result.stdout)
+
+        if match:
+            ttft = match.group(1)
+        
+        # input throughput
+        pattern = r"Input token throughput \(tok/s\):\s+([\d.]+)"
+        match = re.search(pattern, result.stdout)
+
+        if match:
+            input_throughput = match.group(1)
+
+        # output throughput
+        pattern = r"Output token throughput \(tok/s\):\s+([\d.]+)"
+        match = re.search(pattern, result.stdout)
+
+        if match:
+            output_throughput = match.group(1)
+
+        # total througput
+        pattern = r"Total token throughput \(tok/s\):\s+([\d.]+)"
+        match = re.search(pattern, result.stdout)
+
+        if match:
+            total_throughput = match.group(1)
+
+        # QPM
+        pattern = r"Request throughput \(req/s\):\s+([\d.]+)"
+        match = re.search(pattern, result.stdout)
+
+        if match:
+            QPM = float(match.group(1)) * 60
+
+        
+        metrics["tpot (ms)"] = tpot
+        metrics["ttft (ms)"] = ttft
+        metrics["input_throughput (tok/s)"] = input_throughput
+        metrics["output_throughput (tok/s)"] = output_throughput
+        metrics["total_throughput (tok/s)"] = total_throughput
+        metrics["QPM (req/min)"] = QPM
+
+        final_metrics.append(metrics)
     else:
         raise ValueError(f"eval_method must be ali or tencent, but got {args.method}")
 
     print("="*100)
+    print(f"final_metrics: {final_metrics}")
 
     with open(args.output_path, "w") as f:
         f.write(json.dumps(final_metrics, ensure_ascii=False, indent=4))

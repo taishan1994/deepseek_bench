@@ -173,14 +173,40 @@ prefill结果：
 
 ## 腾讯评测
 
+腾讯报告披露测试数据集: 3000条业务脱敏数据集(最大输入16k，平均输入3.5k；最大输出32k， 平均输出1.2k)
+
+
 生成的数据分布：
 
 [analyze] 最终数据集 token 统计:
-  样本数: 3000
-  平均值: 3558.80
-  标准差: 1622.37
-  中位数: 3040.00
-  最小值: 968
-  最大值: 15673
+- 样本数: 3000
+- 平均值: 3558.80
+- 标准差: 1622.37
+- 中位数: 3040.00
+- 最小值: 968
+- 最大值: 15673
 
 ![distribute](./token_length_distribution_tencent.png)
+
+评测脚本：
+```shell
+
+python3 main.py --model /nfs/FM/gongoubo/checkpoints/Qwen/Qwen3-30B-A3B-Instruct-2507 --base_url http://192.168.16.21:18000  --eval_method tencent --output_path /nfs/FM/gongoubo/new_project/workflow/deepseek_bench/output/tencent.json --dataset_path /nfs/FM/gongoubo/new_project/workflow/deepseek_bench/data/sharegpt_normal_distribution_3000.json --output_len 1200 --batch_size 3000
+```
+- 由于sharegpt里可能存在某些敏感内容，因此数据在本地，需要自行下载。
+- 这里限制输出为1.2k。
+- 一次性输入3000条数据并行请求，具体执行多少请求由部署服务决定。
+
+输出样例：
+```json
+[
+    {
+        "tpot (ms)": "6.80",
+        "ttft (ms)": "54.52",
+        "input_throughput (tok/s)": "32.57",
+        "output_throughput (tok/s)": "145.85",
+        "total_throughput (tok/s)": "178.43",
+        "QPM (req/min)": 7.199999999999999
+    }
+]
+```
