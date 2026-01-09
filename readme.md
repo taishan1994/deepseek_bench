@@ -1,3 +1,5 @@
+
+
 # 说明
 对标阿里和腾讯的对deepseek-r1的推理技术的评测。
 
@@ -171,4 +173,14 @@ prefill结果：
 
 ## 腾讯评测
 
-进行中
+生成的数据分布：
+
+[analyze] 最终数据集 token 统计:
+  样本数: 3000
+  平均值: 3558.80
+  标准差: 1622.37
+  中位数: 3040.00
+  最小值: 968
+  最大值: 15673
+
+![distribute](./token_length_distribution_tencent.png)

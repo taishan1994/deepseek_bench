@@ -248,6 +248,18 @@ def main(args):
     elif args.eval_method == "tencent":
         print("tencent")
         # 腾讯的暂时不设置了
+        command = """
+        python3 -m sglang.bench_serving \
+            --backend sglang \
+            --base-url {args.base_url} \
+            --port {port} \
+            --model {args.model} \
+            --dataset-name sharegpt \
+            --dataset-path {args.dataset_path} \
+            --request-rate inf \
+            --flush-cache \
+            --seed 123
+        """.format(args=args, port=port)
 
     else:
         raise ValueError(f"eval_method must be ali or tencent, but got {args.method}")
