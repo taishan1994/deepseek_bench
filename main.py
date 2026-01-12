@@ -56,7 +56,7 @@ def get_args():
         "--deploy_log",
         type=str,
         default="",
-        help="服务部署后的日志路径，主要是为了评测ali的decode阶段的throughout",
+        help="服务部署后的日志路径，主要是为了评测ali的decode阶段的throughout，如果是有多个decode节点，用`,`隔开",
     )
 
     parser.add_argument(
@@ -216,21 +216,22 @@ def main(args):
             final_metrics.append(metrics)
 
             tmp = {}
+            dlogs = args.deploy_log.split(",")
+            for dlog in dlogs:
+                with open(dlog, "r") as f:
+                    lines = f.readlines()
+                    for line in lines:
+                        pattern = r"#running-req:\s*(?P<running_req>\d+).*?gen throughput \(token/s\):\s*(?P<gen_throughput>[\d.]+)"
+                        match = re.search(pattern, line)
 
-            with open(args.deploy_log, "r") as f:
-                lines = f.readlines()
-                for line in lines:
-                    pattern = r"#running-req:\s*(?P<running_req>\d+).*?gen throughput \(token/s\):\s*(?P<gen_throughput>[\d.]+)"
-                    match = re.search(pattern, line)
-
-                    if match:
-                        # print(f"running-req: {match.group('running_req')}")
-                        # print(f"gen throughput: {match.group('gen_throughput')} token/s")
-                        running_req = int(match.group('running_req'))
-                        gen_throughput = float(match.group('gen_throughput'))
-                        if running_req not in tmp:
-                            tmp[running_req] = []
-                        tmp[running_req].append(float(gen_throughput))
+                        if match:
+                            # print(f"running-req: {match.group('running_req')}")
+                            # print(f"gen throughput: {match.group('gen_throughput')} token/s")
+                            running_req = int(match.group('running_req'))
+                            gen_throughput = float(match.group('gen_throughput'))
+                            if running_req not in tmp:
+                                tmp[running_req] = []
+                            tmp[running_req].append(float(gen_throughput))
             
             # 取中位数
             metrics = {}
