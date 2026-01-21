@@ -337,6 +337,7 @@ def main(args):
                 final_max_concurrency = max_concurrency
                 continue
             else:
+                best_concurrency = -1
                 if i - 1 >= 0:
                     pre_max_concurrency = int(max_concurrencys[i-1])
                     current_max_concurrency = int(max_concurrency)
@@ -368,7 +369,8 @@ def main(args):
                         else:
                             right = mid - 1
                     
-                    final_max_concurrency = best_concurrency
+                    if best_concurrency != -1:
+                        final_max_concurrency = best_concurrency
                 break
 
         if final_max_concurrency == -1:
@@ -390,7 +392,7 @@ def main(args):
             --flush-cache \
             --seed 123 \
             --max-concurrency {max_concurrency} \
-            --num-prompts 1
+            --num-prompts 3000
         """.format(args=args, port=port, max_concurrency=final_max_concurrency)
 
         print(command)

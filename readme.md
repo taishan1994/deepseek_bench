@@ -218,6 +218,8 @@ for max_concurrency in max_concurrencys:
     """.format(args=args, port=port, max_concurrency=max_concurrency)
 ```
 
+另外，找到超出限制的max_concurrency后，会从前一个最近的开始进行二分查找。
+
 第二次测评全量数据：
 
 ```python
