@@ -173,104 +173,70 @@ prefill结果：
 
 ## 腾讯评测
 
-**核心原则：在限制TPOT为小于等于50ms的情况下，最大化total token/s以及QPM**
-
-**ttft为什么耗时那么长？**
-
-服务端的容量是有限的，在prefill和decode的时候，都会有请求进行等待。
+**核心原则：在限制TPOT为小于50ms，TTFT小于2s的情况下，最大化total token/s以及QPM**
 
 评测脚本：
 
 ```shell
-python3 main.py --model /mnt/md0/checkpoints/Deepseek-R1 --base_url http://0.0.0.0:8000  --eval_method tencent --output_path /mnt/md0/deepseek_bench/output/deepseek_r1_fp8_tencent.json --dataset_path /root/gongoubo/ShareGPT_V3_unfiltered_cleaned_split.json --batch_size 128 --request_rate 128 --max_concurrency 128
-
+python3 main.py --model /mnt/md0/checkpoints/Deepseek-R1 --base_url http://0.0.0.0:8000  --eval_method tencent --output_path /mnt/md0/deepseek_bench/output/deepseek_r1_fp8_tencent.json --dataset_path /mnt/md0/deepseek_bench/data/sharegpt_normal_distribution_3000.json --batch_size 128
 ```
 
 说明：
 
-- 输入被限制为3500，输出被限制为1200
+- --batch_size：请求数，主要是用于循环调用确定最大并发数。在确定最大并发数之后，再使用全量的3000条数据评测最终结果。
 
-以下是一个样例和评测结果：
+- 也可以通过--max_concurrencys来自定义搜索的最大并发数空间，不同并发数之间用,分隔。
 
-部署脚本：
+第一次搜索最大并发数：
 
-```shell
-python3 -m sglang.launch_server \
-    --model-path /mnt/md0/checkpoints/Deepseek-R1 \
-    --tp 8 \
-    --trust-remote-code \
-    --host 0.0.0.0 \
-    --port 8000 \
-    --mem-fraction-static 0.9 \
-    --cuda-graph-max-bs 128 \
-    --max-running-requests 128 \
-    --attention-backend flashinfer 
+```python
+if args.max_concurrencys != "":
+            max_concurrencys = max_concurrencys.split(",")
+        else:
+            max_concurrencys = [6, 8, 12, 16, 20, 24, 28, 32, 40, 48, 56, 64, 128]
+
+        tmp_metrics = []
+        final_max_concurrency = -1
+        for max_concurrency in max_concurrencys:
+            # 先用固定输入输出查找最可能的最大并发数
+            command = """
+            python3 -m sglang.bench_serving \
+                --backend sglang \
+                --base-url {args.base_url} \
+                --port {port} \
+                --model {args.model} \
+                --tokenizer {args.model} \
+                --dataset-name random \
+                --dataset-path {args.dataset_path} \
+                --random-input-len 3500 \
+                --random-output-len 1200 \
+                --random-range-ratio 1 \
+                --flush-cache \
+                --seed 123 \
+                --max-concurrency {max_concurrency} \
+                --num-prompts {args.batch_size}
+            """.format(args=args, port=port, max_concurrency=max_concurrency)
 ```
 
-评测脚本：
+第二次测评全量数据：
 
-```shell
-python3 main.py --model /mnt/md0/checkpoints/Deepseek-R1 --base_url http://0.0.0.0:8000  --eval_method tencent --output_path /mnt/md0/deepseek_bench/output/deepseek_r1_fp8_tencent.json --dataset_path /root/gongoubo/ShareGPT_V3_unfiltered_cleaned_split.json --batch_size 128 --request_rate 128 --max_concurrency 128
-
+```python
+command = """
+        python3 -m sglang.bench_serving \
+            --backend sglang \
+            --base-url {args.base_url} \
+            --port {port} \
+            --model {args.model} \
+            --dataset-name sharegpt \
+            --tokenizer {args.model} \
+            --dataset-path {args.dataset_path} \
+            --sharegpt-output-len 1200 \
+            --flush-cache \
+            --seed 123 \
+            --max-concurrency {max_concurrency} \
+            --num-prompts 3000
+        """.format(args=args, port=port, max_concurrency=final_max_concurrency)
 ```
-
-评测结果：
-
-```shell
-============ Serving Benchmark Result ============
-Backend:                                 sglang    
-Traffic request rate:                    128.0     
-Max request concurrency:                 128       
-Successful requests:                     128       
-Benchmark duration (s):                  332.81    
-Total input tokens:                      448000    
-Total input text tokens:                 448000    
-Total input vision tokens:               0         
-Total generated tokens:                  153600    
-Total generated tokens (retokenized):    153232    
-Request throughput (req/s):              0.38      
-Input token throughput (tok/s):          1346.12   
-Output token throughput (tok/s):         461.53    
-Peak output token throughput (tok/s):    585.00    
-Peak concurrent requests:                128       
-Total token throughput (tok/s):          1807.65   
-Concurrency:                             72.22     
-----------------End-to-End Latency----------------
-Mean E2E Latency (ms):                   187775.43 
-Median E2E Latency (ms):                 187361.54 
----------------Time to First Token----------------
-Mean TTFT (ms):                          144639.27 
-Median TTFT (ms):                        151860.76 
-P99 TTFT (ms):                           302543.20 
------Time per Output Token (excl. 1st token)------
-Mean TPOT (ms):                          35.98     
-Median TPOT (ms):                        28.90     
-P99 TPOT (ms):                           216.36    
----------------Inter-Token Latency----------------
-Mean ITL (ms):                           35.98     
-Median ITL (ms):                         27.18     
-P95 ITL (ms):                            28.74     
-P99 ITL (ms):                            29.52     
-Max ITL (ms):                            272786.87 
-==================================================
-
-====================================================================================================
-final_metrics: [{'tpot (ms)': '35.98', 'ttft (ms)': '144639.27', 'input_throughput (tok/s)': '1346.12', 'output_throughput (tok/s)': '461.53', 'total_throughput (tok/s)': '1807.65', 'QPM (req/min)': 22.8}]
-
-```
-
-| batchsize/TPOT(ms)  | attention后端 | num-prompts | request-rate | max-concurrency | QPM  | Input token  throughput (tok/s) | Output token  throughput (tok/s) | Total token  throughput (tok/s) | TTFT(ms)  | TPOT(ms) | 备注              |
-| ------------------- | ------------- | ----------- | ------------ | --------------- | ---- | ------------------------------- | -------------------------------- | ------------------------------- | --------- | -------- | ----------------- |
-| deepseek-r1-wi4afp8 | flashinfer    | 128         | 128          | 128             | 42   | 2449.99                         | 840                              | 3289.99                         | 39079.24  | 119.49   | sgl-0.4.6-rebuild |
-| deepseek-r1-fp8     | flashinfer    | 128         | 128          | 128             | 14.4 | 854.96                          | 293.13                           | 1148.09                         | 234334.82 | 54.18    | sgl-0.4.6-rebuild |
-| deepseek-r1-fp8     | flashinfer    | 128         | 128          | 128             | 15   | 873.44                          | 299.47                           | 1172.91                         | 226104.28 | 48.61    | sgl-0.4.6         |
-| deepseek-r1-fp8     | flashinfer    | 128         | 128          | 128             | 22.8 | 1346.64                         | 461.71                           | 1808.35                         | 144683.1  | 35.95    | sgl-0.5.7         |
-| deepseek-r1-fp8     | flashinfer    | 256         | 128          | 128             | 23.4 | 1359.02                         | 465.95                           | 1824.97                         | 210335.13 | 41.46    | sgl-0.5.7         |
-| deepseek-r1-fp8     | flashinfer    | 512         | 128          | 128             | 23.4 | 1359.07                         | 465.97                           | 1825.04                         | 239687.05 | 44.06    | sgl-0.5.7         |
-
-**需要注意：**
-
-- 这里以num-prompts=128,  request-rate=128,  max-concurrency=128为基准，确保tpot在50ms以内，如果太小，可以适当增加请求数，如果太大，可以适当减少request-rate和max-concurrency。
 
 ## 单独评测脚本
 
@@ -290,12 +256,11 @@ python3 -m sglang.bench_serving \
     --random-output-len 1200  \   
     --random-range-ratio 1  \   
     --flush-cache  \   
-    --seed 123  \   
-    --request-rate 8  \   
+    --seed 123  \    
     --max-concurrency 8
 ```
 
 - --request-rate: Number of requests per second. If this is inf, then all the requests are sent at time 0. Otherwise, we use Poisson process to synthesize the request arrival times. Default is inf.
-- max-concurrency: Maximum number of concurrent requests. This can be used to help simulate an environment where a higher level component is enforcing a maximum number of concurrent requests. While the --request-rate argument controls the rate at which requests are initiated, this argument will control how many are actually allowed to execute at a time. This means that when used in combination, the actual  request rate may be lower than specified with --request-rate, if the server is not processing requests fast enough to keep up.
-- --num-prompts: 并发数
+- --max-concurrency: Maximum number of concurrent requests. This can be used to help simulate an environment where a higher level component is enforcing a maximum number of concurrent requests. While the --request-rate argument controls the rate at which requests are initiated, this argument will control how many are actually allowed to execute at a time. This means that when used in combination, the actual  request rate may be lower than specified with --request-rate, if the server is not processing requests fast enough to keep up.
+- --num-prompts: 请求数
 

@@ -53,6 +53,13 @@ def get_args():
     )
 
     parser.add_argument(
+        "--max_concurrencys",
+        type=str,
+        default="",
+        help="腾讯评测自定义搜索最大并发",
+    )
+
+    parser.add_argument(
         "--deploy_log",
         type=str,
         default="",
@@ -98,14 +105,14 @@ def get_args():
         "--request_rate",
         type=str,
         default=128,
-        help="每秒最大发送的请求数",
+        help="每秒最大发送的请求数，支持多个之间用,分割",
     )
 
     parser.add_argument(
         "--max_concurrency",
         type=str,
         default=128,
-        help="最大并发数",
+        help="最大并发数，支持多个之间用,分割",
     )
 
 
@@ -268,6 +275,69 @@ def main(args):
 
         metrics = {}
 
+        if args.max_concurrencys != "":
+            max_concurrencys = max_concurrencys.split(",")
+        else:
+            max_concurrencys = [6, 8, 12, 16, 20, 24, 28, 32, 40, 48, 56, 64, 128]
+
+        tmp_metrics = []
+        final_max_concurrency = -1
+        for max_concurrency in max_concurrencys:
+            # 先用固定输入输出查找最可能的最大并发数
+            command = """
+            python3 -m sglang.bench_serving \
+                --backend sglang \
+                --base-url {args.base_url} \
+                --port {port} \
+                --model {args.model} \
+                --tokenizer {args.model} \
+                --dataset-name random \
+                --dataset-path {args.dataset_path} \
+                --random-input-len 3500 \
+                --random-output-len 1200 \
+                --random-range-ratio 1 \
+                --flush-cache \
+                --seed 123 \
+                --max-concurrency {max_concurrency} \
+                --num-prompts {args.batch_size}
+            """.format(args=args, port=port, max_concurrency=max_concurrency)
+        
+            print(command)
+            result = subprocess.run(command, shell=True, capture_output=True, text=True)
+            print(result.stdout)
+
+            # 保存评估指标
+            # TPOT
+            pattern = r"Mean TPOT \(ms\):\s+([\d.]+)"
+            match = re.search(pattern, result.stdout)
+
+            if match:
+                tpot = match.group(1)
+
+            # TTFT
+            pattern = r"Mean TTFT \(ms\):\s+([\d.]+)"
+            match = re.search(pattern, result.stdout)
+
+            if match:
+                ttft = match.group(1)
+
+            print(tpot, ttft)
+            tmp_metrics.append({
+                "num_prompts": args.batch_size,
+                "max_concurrency": max_concurrency,
+                "ttft": ttft,
+                "tpot": tpot
+            })
+            if float(tpot) < 50 and float(ttft) < 2000:
+                final_max_concurrency = max_concurrency
+                continue
+            else:
+                break
+
+        if final_max_concurrency == -1:
+            print(tmp_metrics)
+            raise Exception("请确认最大并发是否达到要求") 
+
         # 腾讯的暂时不设置了
         command = """
         python3 -m sglang.bench_serving \
@@ -275,18 +345,15 @@ def main(args):
             --base-url {args.base_url} \
             --port {port} \
             --model {args.model} \
-            --dataset-name random \
+            --dataset-name sharegpt \
             --tokenizer {args.model} \
             --dataset-path {args.dataset_path} \
-            --request-rate {args.request_rate} \
-            --random-input-len 3500 \
-            --random-output-len 1200 \
-            --random-range-ratio 1 \
+            --sharegpt-output-len 1200 \
             --flush-cache \
             --seed 123 \
-            --num-prompts {args.batch_size} \
-            --max-concurrency {args.max_concurrency}
-        """.format(args=args, port=port)
+            --max-concurrency {max_concurrency} \
+            --num-prompts 3000
+        """.format(args=args, port=port, max_concurrency=final_max_concurrency)
 
         print(command)
         result = subprocess.run(command, shell=True, capture_output=True, text=True)
@@ -335,13 +402,14 @@ def main(args):
         if match:
             QPM = float(match.group(1)) * 60
 
-        
+        metrics["max_concurrency"] = final_max_concurrency
         metrics["tpot (ms)"] = tpot
         metrics["ttft (ms)"] = ttft
         metrics["input_throughput (tok/s)"] = input_throughput
         metrics["output_throughput (tok/s)"] = output_throughput
         metrics["total_throughput (tok/s)"] = total_throughput
         metrics["QPM (req/min)"] = QPM
+        metrics["tmp_metrics"] = tmp_metrics
 
         final_metrics.append(metrics)
     else:
