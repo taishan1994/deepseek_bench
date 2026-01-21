@@ -191,51 +191,51 @@ python3 main.py --model /mnt/md0/checkpoints/Deepseek-R1 --base_url http://0.0.0
 
 ```python
 if args.max_concurrencys != "":
-            max_concurrencys = max_concurrencys.split(",")
-        else:
-            max_concurrencys = [6, 8, 12, 16, 20, 24, 28, 32, 40, 48, 56, 64, 128]
+    max_concurrencys = max_concurrencys.split(",")
+else:
+    max_concurrencys = [6, 8, 12, 16, 20, 24, 28, 32, 40, 48, 56, 64, 128]
 
-        tmp_metrics = []
-        final_max_concurrency = -1
-        for max_concurrency in max_concurrencys:
-            # 先用固定输入输出查找最可能的最大并发数
-            command = """
-            python3 -m sglang.bench_serving \
-                --backend sglang \
-                --base-url {args.base_url} \
-                --port {port} \
-                --model {args.model} \
-                --tokenizer {args.model} \
-                --dataset-name random \
-                --dataset-path {args.dataset_path} \
-                --random-input-len 3500 \
-                --random-output-len 1200 \
-                --random-range-ratio 1 \
-                --flush-cache \
-                --seed 123 \
-                --max-concurrency {max_concurrency} \
-                --num-prompts {args.batch_size}
-            """.format(args=args, port=port, max_concurrency=max_concurrency)
+tmp_metrics = []
+final_max_concurrency = -1
+for max_concurrency in max_concurrencys:
+    # 先用固定输入输出查找最可能的最大并发数
+    command = """
+    python3 -m sglang.bench_serving \
+        --backend sglang \
+        --base-url {args.base_url} \
+        --port {port} \
+        --model {args.model} \
+        --tokenizer {args.model} \
+        --dataset-name random \
+        --dataset-path {args.dataset_path} \
+        --random-input-len 3500 \
+        --random-output-len 1200 \
+        --random-range-ratio 1 \
+        --flush-cache \
+        --seed 123 \
+        --max-concurrency {max_concurrency} \
+        --num-prompts {args.batch_size}
+    """.format(args=args, port=port, max_concurrency=max_concurrency)
 ```
 
 第二次测评全量数据：
 
 ```python
 command = """
-        python3 -m sglang.bench_serving \
-            --backend sglang \
-            --base-url {args.base_url} \
-            --port {port} \
-            --model {args.model} \
-            --dataset-name sharegpt \
-            --tokenizer {args.model} \
-            --dataset-path {args.dataset_path} \
-            --sharegpt-output-len 1200 \
-            --flush-cache \
-            --seed 123 \
-            --max-concurrency {max_concurrency} \
-            --num-prompts 3000
-        """.format(args=args, port=port, max_concurrency=final_max_concurrency)
+    python3 -m sglang.bench_serving \
+        --backend sglang \
+        --base-url {args.base_url} \
+        --port {port} \
+        --model {args.model} \
+        --dataset-name sharegpt \
+        --tokenizer {args.model} \
+        --dataset-path {args.dataset_path} \
+        --sharegpt-output-len 1200 \
+        --flush-cache \
+        --seed 123 \
+        --max-concurrency {max_concurrency} \
+        --num-prompts 3000
+    """.format(args=args, port=port, max_concurrency=final_max_concurrency)
 ```
 
 ## 单独评测脚本
