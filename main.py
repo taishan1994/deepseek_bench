@@ -15,7 +15,7 @@ python3 main.py --model /nfs/FM/gongoubo/checkpoints/Qwen/Qwen3-30B-A3B-Instruct
 
 python3 main.py --model /nfs/FM/gongoubo/checkpoints/Qwen/Qwen3-30B-A3B-Instruct-2507 --base_url http://192.168.16.21:18000 --eval_type decode --eval_method ali --decode_gpu_num 1 --deploy_log /nfs/FM/gongoubo/new_project/workflow/deepseek_bench/logs/test.log --output_path /nfs/FM/gongoubo/new_project/workflow/deepseek_bench/output/ali_decode.json
 
-python3 main.py --model /nfs/FM/gongoubo/checkpoints/Qwen/Qwen3-30B-A3B-Instruct-2507 --base_url http://192.168.16.21:18000  --eval_method tencent --output_path /nfs/FM/gongoubo/new_project/workflow/deepseek_bench/output/tencent.json --dataset_path /nfs/FM/gongoubo/new_project/workflow/deepseek_bench/data/sharegpt_normal_distribution_3000.json --output_len 1200 --batch_size 3000
+python3 main.py --model /mnt/md0/checkpoints/Deepseek-R1 --base_url http://0.0.0.0:8000  --eval_method tencent --output_path /mnt/md0/deepseek_bench/output/deepseek_r1_fp8_tencent.json --dataset_path /root/gongoubo/ShareGPT_V3_unfiltered_cleaned_split.json --batch_size 128 --request_rate 128 --max_concurrency 128
 """
 
 
@@ -93,6 +93,21 @@ def get_args():
         default="",
         help="并发数",
     )
+
+    parser.add_argument(
+        "--request_rate",
+        type=str,
+        default=128,
+        help="每秒最大发送的请求数",
+    )
+
+    parser.add_argument(
+        "--max_concurrency",
+        type=str,
+        default=128,
+        help="最大并发数",
+    )
+
 
     parser.add_argument(
         "--dataset_path",
@@ -260,14 +275,20 @@ def main(args):
             --base-url {args.base_url} \
             --port {port} \
             --model {args.model} \
-            --dataset-name sharegpt \
+            --dataset-name random \
+            --tokenizer {args.model} \
             --dataset-path {args.dataset_path} \
-            --request-rate inf \
+            --request-rate {args.request_rate} \
+            --random-input-len 3500 \
+            --random-output-len 1200 \
+            --random-range-ratio 1 \
             --flush-cache \
             --seed 123 \
-            --sharegpt-output-len {args.output_len} \
-            --num-prompts {args.batch_size}
+            --num-prompts {args.batch_size} \
+            --max-concurrency {args.max_concurrency}
         """.format(args=args, port=port)
+
+        print(command)
         result = subprocess.run(command, shell=True, capture_output=True, text=True)
         print(result.stdout)
 
@@ -336,5 +357,4 @@ def main(args):
 
 if __name__ == "__main__":
     args = get_args()
-    main(args)  
-
+    main(args)
