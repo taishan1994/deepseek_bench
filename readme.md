@@ -191,7 +191,7 @@ python3 main.py --model /mnt/md0/checkpoints/Deepseek-R1 --base_url http://0.0.0
 
 ```python
 if args.max_concurrencys != "":
-    max_concurrencys = max_concurrencys.split(",")
+    max_concurrencys = args.max_concurrencys.split(",")
 else:
     max_concurrencys = [6, 8, 12, 16, 20, 24, 28, 32, 40, 48, 56, 64, 128]
 
