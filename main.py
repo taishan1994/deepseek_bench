@@ -138,6 +138,47 @@ def get_args():
     return parser.parse_args()
 
 
+def run_benchmark_and_extract_metrics(args, port, max_concurrency, dataset_name="random", input_len=3500, output_len=1200, num_prompts=None):
+    if num_prompts is None:
+        num_prompts = args.batch_size
+    
+    command = """
+    python3 -m sglang.bench_serving \
+        --backend sglang \
+        --base-url {args.base_url} \
+        --port {port} \
+        --model {args.model} \
+        --tokenizer {args.model} \
+        --dataset-name {dataset_name} \
+        --dataset-path {args.dataset_path} \
+        --random-input-len {input_len} \
+        --random-output-len {output_len} \
+        --random-range-ratio 1 \
+        --request-rate inf \
+        --flush-cache \
+        --seed 123 \
+        --max-concurrency {max_concurrency} \
+        --num-prompts {num_prompts}
+    """.format(args=args, port=port, max_concurrency=max_concurrency, dataset_name=dataset_name, 
+               input_len=input_len, output_len=output_len, num_prompts=num_prompts)
+    
+    print(command)
+    result = subprocess.run(command, shell=True, capture_output=True, text=True)
+    print(result.stdout)
+    
+    # 提取 TPOT
+    pattern = r"Mean TPOT \(ms\):\s+([\d.]+)"
+    match = re.search(pattern, result.stdout)
+    tpot = match.group(1) if match else None
+    
+    # 提取 TTFT
+    pattern = r"Mean TTFT \(ms\):\s+([\d.]+)"
+    match = re.search(pattern, result.stdout)
+    ttft = match.group(1) if match else None
+    
+    return tpot, ttft
+
+
 def main(args):
     print(vars(args))
 
@@ -282,45 +323,9 @@ def main(args):
 
         tmp_metrics = []
         final_max_concurrency = -1
-        for max_concurrency in max_concurrencys:
-            # 先用固定输入输出查找最可能的最大并发数
-            command = """
-            python3 -m sglang.bench_serving \
-                --backend sglang \
-                --base-url {args.base_url} \
-                --port {port} \
-                --model {args.model} \
-                --tokenizer {args.model} \
-                --dataset-name random \
-                --dataset-path {args.dataset_path} \
-                --random-input-len 3500 \
-                --random-output-len 1200 \
-                --random-range-ratio 1 \
-                --flush-cache \
-                --seed 123 \
-                --max-concurrency {max_concurrency} \
-                --num-prompts {args.batch_size}
-            """.format(args=args, port=port, max_concurrency=max_concurrency)
-        
-            print(command)
-            result = subprocess.run(command, shell=True, capture_output=True, text=True)
-            print(result.stdout)
-
-            # 保存评估指标
-            # TPOT
-            pattern = r"Mean TPOT \(ms\):\s+([\d.]+)"
-            match = re.search(pattern, result.stdout)
-
-            if match:
-                tpot = match.group(1)
-
-            # TTFT
-            pattern = r"Mean TTFT \(ms\):\s+([\d.]+)"
-            match = re.search(pattern, result.stdout)
-
-            if match:
-                ttft = match.group(1)
-
+        for i, max_concurrency in enumerate(max_concurrencys):
+            tpot, ttft = run_benchmark_and_extract_metrics(args, port, max_concurrency)
+            
             print(tpot, ttft)
             tmp_metrics.append({
                 "num_prompts": args.batch_size,
@@ -332,6 +337,38 @@ def main(args):
                 final_max_concurrency = max_concurrency
                 continue
             else:
+                if i - 1 >= 0:
+                    pre_max_concurrency = int(max_concurrencys[i-1])
+                    current_max_concurrency = int(max_concurrency)
+                    
+                    # 二分查找：在 (pre_max_concurrency, current_max_concurrency) 范围内找到满足条件的最大值
+                    # 注意：pre_max_concurrency 已测试且满足条件，current_max_concurrency 已测试且不满足条件
+                    left = pre_max_concurrency + 1
+                    right = current_max_concurrency - 1
+                    best_concurrency = pre_max_concurrency
+                    
+                    while left <= right:
+                        mid = (left + right) // 2
+                        print(f"二分查找测试 concurrency: {mid}")
+                        mid_tpot, mid_ttft = run_benchmark_and_extract_metrics(args, port, mid)
+                        
+                        print(f"mid_tpot: {mid_tpot}, mid_ttft: {mid_ttft}")
+                        
+                        tmp_metrics.append({
+                            "num_prompts": args.batch_size,
+                            "max_concurrency": mid,
+                            "ttft": mid_ttft,
+                            "tpot": mid_tpot,
+                            "binary_search": True
+                        })
+                        
+                        if mid_tpot is not None and mid_ttft is not None and float(mid_tpot) < 50 and float(mid_ttft) < 2000:
+                            best_concurrency = mid
+                            left = mid + 1
+                        else:
+                            right = mid - 1
+                    
+                    final_max_concurrency = best_concurrency
                 break
 
         if final_max_concurrency == -1:
@@ -349,10 +386,11 @@ def main(args):
             --tokenizer {args.model} \
             --dataset-path {args.dataset_path} \
             --sharegpt-output-len 1200 \
+            --request-rate inf \
             --flush-cache \
             --seed 123 \
             --max-concurrency {max_concurrency} \
-            --num-prompts 3000
+            --num-prompts 1
         """.format(args=args, port=port, max_concurrency=final_max_concurrency)
 
         print(command)
