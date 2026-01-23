@@ -178,45 +178,14 @@ prefill结果：
 评测脚本：
 
 ```shell
-python3 main.py --model /mnt/md0/checkpoints/Deepseek-R1 --base_url http://0.0.0.0:8000  --eval_method tencent --output_path /mnt/md0/deepseek_bench/output/deepseek_r1_fp8_tencent.json --dataset_path /mnt/md0/deepseek_bench/data/sharegpt_normal_distribution_3000.json --batch_size 128
+python3 main.py --model /mnt/md0/checkpoints/Deepseek-R1 --base_url http://0.0.0.0:8000  --eval_method tencent --output_path /mnt/md0/deepseek_bench/output/deepseek_r1_fp8_tencent.json --dataset_path /mnt/md0/deepseek_bench/data/sharegpt_normal_distribution_3000.json
 ```
 
 说明：
 
-- --batch_size：请求数，主要是用于循环调用确定最大并发数。在确定最大并发数之后，再使用全量的3000条数据评测最终结果。
+- 使用3000条数据，输出10，优先搜索ttft<2000ms，默认的搜索空间：[6, 8, 12, 16, 20, 24, 28, 32, 40, 48, 56, 64, 128]
 
 - 也可以通过--max_concurrencys来自定义搜索的最大并发数空间，不同并发数之间用,分隔。
-
-第一次搜索最大并发数：
-
-```python
-if args.max_concurrencys != "":
-    max_concurrencys = args.max_concurrencys.split(",")
-else:
-    max_concurrencys = [6, 8, 12, 16, 20, 24, 28, 32, 40, 48, 56, 64, 128]
-
-tmp_metrics = []
-final_max_concurrency = -1
-for max_concurrency in max_concurrencys:
-    # 先用固定输入输出查找最可能的最大并发数
-    command = """
-    python3 -m sglang.bench_serving \
-        --backend sglang \
-        --base-url {args.base_url} \
-        --port {port} \
-        --model {args.model} \
-        --tokenizer {args.model} \
-        --dataset-name random \
-        --dataset-path {args.dataset_path} \
-        --random-input-len 3500 \
-        --random-output-len 1200 \
-        --random-range-ratio 1 \
-        --flush-cache \
-        --seed 123 \
-        --max-concurrency {max_concurrency} \
-        --num-prompts {args.batch_size}
-    """.format(args=args, port=port, max_concurrency=max_concurrency)
-```
 
 另外，找到超出限制的max_concurrency后，会从前一个最近的开始进行二分查找。
 
