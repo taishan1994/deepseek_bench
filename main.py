@@ -323,7 +323,6 @@ def main(args):
             metrics = {}
             repeat_time = 10
             batch_size = [1,2,4,8,12,16,20,24,28,32,40,48,56,64]
-            batch_size = [i*repeat_time for i in batch_size]
             # batch_size = [1,2,4]
             for bs in tqdm(batch_size, total=len(batch_size)):
                 command = """
@@ -334,15 +333,15 @@ def main(args):
                     --model {args.model} \
                     --dataset-name random \
                     --dataset-path {args.dataset_path} \
-                    --num-prompts {bs} \
+                    --num-prompts {num_prompts} \
                     --request-rate inf \
                     --random-input-len 4096 \
                     --random-output-len 1536 \
                     --random-range-ratio 1 \
                     --flush-cache \
                     --seed 123 \
-                    --max-concurrency {bs / repeat_time}
-                """.format(args=args, port=port, bs=bs)
+                    --max-concurrency {bs}
+                """.format(args=args, port=port, bs=bs, num_prompts=bs*repeat_time)
                 # os.system(command)
                 print(command)
                 result = subprocess.run(command, shell=True, capture_output=True, text=True)
@@ -358,7 +357,7 @@ def main(args):
                 if match:
                     value = match.group(1)
                     print(value)
-                    metrics[bs / repeat_time] = float(value)
+                    metrics[bs] = float(value)
 
             print("TPOT (ms)：", metrics)
             final_metrics.append(metrics)
