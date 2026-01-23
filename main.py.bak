@@ -142,54 +142,29 @@ def run_benchmark_and_extract_metrics(args, port, max_concurrency, dataset_name=
     if num_prompts is None:
         num_prompts = args.batch_size
     
-    # command = """
-    # python3 -m sglang.bench_serving \
-    #     --backend sglang \
-    #     --base-url {args.base_url} \
-    #     --port {port} \
-    #     --model {args.model} \
-    #     --tokenizer {args.model} \
-    #     --dataset-name {dataset_name} \
-    #     --dataset-path {args.dataset_path} \
-    #     --random-input-len {input_len} \
-    #     --random-output-len {output_len} \
-    #     --random-range-ratio 1 \
-    #     --request-rate inf \
-    #     --flush-cache \
-    #     --seed 123 \
-    #     --max-concurrency {max_concurrency} \
-    #     --num-prompts {num_prompts}
-    # """.format(args=args, port=port, max_concurrency=max_concurrency, dataset_name=dataset_name, 
-    #            input_len=input_len, output_len=output_len, num_prompts=num_prompts)
-
     command = """
-        python3 -m sglang.bench_serving \
-            --backend sglang \
-            --base-url {args.base_url} \
-            --port {port} \
-            --model {args.model} \
-            --dataset-name sharegpt \
-            --tokenizer {args.model} \
-            --dataset-path {args.dataset_path} \
-            --sharegpt-output-len 10 \
-            --request-rate inf \
-            --flush-cache \
-            --seed 123 \
-            --max-concurrency {max_concurrency} \
-            --num-prompts 3000
-    """.format(args=args, port=port, max_concurrency=max_concurrency)
+    python3 -m sglang.bench_serving \
+        --backend sglang \
+        --base-url {args.base_url} \
+        --port {port} \
+        --model {args.model} \
+        --tokenizer {args.model} \
+        --dataset-name {dataset_name} \
+        --dataset-path {args.dataset_path} \
+        --random-input-len {input_len} \
+        --random-output-len {output_len} \
+        --random-range-ratio 1 \
+        --request-rate inf \
+        --flush-cache \
+        --seed 123 \
+        --max-concurrency {max_concurrency} \
+        --num-prompts {num_prompts}
+    """.format(args=args, port=port, max_concurrency=max_concurrency, dataset_name=dataset_name, 
+               input_len=input_len, output_len=output_len, num_prompts=num_prompts)
     
     print(command)
     result = subprocess.run(command, shell=True, capture_output=True, text=True)
     print(result.stdout)
-    
-    if result.returncode != 0:
-        print(f"命令执行失败，返回码: {result.returncode}")
-        print(f"错误信息: {result.stderr}")
-        return None, None
-    
-    if result.stderr:
-        print(f"警告信息: {result.stderr}")
     
     # 提取 TPOT
     pattern = r"Mean TPOT \(ms\):\s+([\d.]+)"
@@ -358,7 +333,7 @@ def main(args):
                 "ttft": ttft,
                 "tpot": tpot
             })
-            if float(ttft) < 2000:
+            if float(tpot) < 50 and float(ttft) < 2000:
                 final_max_concurrency = max_concurrency
                 continue
             else:
@@ -388,7 +363,7 @@ def main(args):
                             "binary_search": True
                         })
                         
-                        if mid_tpot is not None and mid_ttft is not None and float(mid_ttft) < 2000:
+                        if mid_tpot is not None and mid_ttft is not None and float(mid_tpot) < 50 and float(mid_ttft) < 2000:
                             best_concurrency = mid
                             left = mid + 1
                         else:
