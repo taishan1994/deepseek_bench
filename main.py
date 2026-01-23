@@ -285,6 +285,7 @@ def main(args):
             print(command)
             result = subprocess.run(command, shell=True, capture_output=True, text=True)
             print(result.stdout)
+            print(result.stderr)
             
             tmp = {}
             dlogs = args.deploy_log.split(",")
