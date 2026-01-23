@@ -263,46 +263,29 @@ def main(args):
         elif args.eval_type == "decode":
             print("decode")
 
-            metrics = {}
-
-            batch_size = [1,2,4,8,12,16,20,24,28,32,40,48,56,64]
-            # batch_size = [1,2,4]
-            for bs in tqdm(batch_size, total=len(batch_size)):
-                command = """
-                python3 -m sglang.bench_serving \
-                    --backend sglang \
-                    --base-url {args.base_url} \
-                    --port {port} \
-                    --model {args.model} \
-                    --dataset-name random \
-                    --dataset-path {args.dataset_path} \
-                    --num-prompts {bs} \
-                    --request-rate inf \
-                    --random-input-len 4096 \
-                    --random-output-len 1536 \
-                    --random-range-ratio 1 \
-                    --flush-cache \
-                    --seed 123
-                """.format(args=args, port=port, bs=bs)
-                # os.system(command)
-                result = subprocess.run(command, shell=True, capture_output=True, text=True)
-                # 从日志里面获取throughput
-                 # 打印终端输出
-                # print("标准输出:")
-                # print(result.stdout)
-
-                # 提取数字
-                pattern = r"Mean TPOT \(ms\):\s+([\d.]+)"
-                match = re.search(pattern, result.stdout)
-
-                if match:
-                    value = match.group(1)
-                    print(value)
-                    metrics[bs] = float(value)
-
-            print("TPOT (ms)：", metrics)
-            final_metrics.append(metrics)
-
+            # 先测per_user_throughput和per_gpu_thrugput
+            command = """
+            python3 -m sglang.bench_serving \
+                --backend sglang \
+                --base-url {args.base_url} \
+                --port {port} \
+                --model {args.model} \
+                --dataset-name random \
+                --dataset-path {args.dataset_path} \
+                --num-prompts 4096 \
+                --request-rate inf \
+                --random-input-len 4096 \
+                --random-output-len 1536 \
+                --random-range-ratio 1 \
+                --flush-cache \
+                --seed 123 \
+                --max-concurrency 2048
+            """.format(args=args, port=port)
+            # os.system(command)
+            print(command)
+            result = subprocess.run(command, shell=True, capture_output=True, text=True)
+            print(result.stdout)
+            
             tmp = {}
             dlogs = args.deploy_log.split(",")
             for dlog in dlogs:
@@ -334,6 +317,50 @@ def main(args):
                 # metrics[running_req]["gen_througput_list"] = throughputs
 
             pprint(metrics)
+            final_metrics.append(metrics)
+
+
+            metrics = {}
+            repeat_time = 10
+            batch_size = [1,2,4,8,12,16,20,24,28,32,40,48,56,64]
+            batch_size = [i*repeat_time for i in batch_size]
+            # batch_size = [1,2,4]
+            for bs in tqdm(batch_size, total=len(batch_size)):
+                command = """
+                python3 -m sglang.bench_serving \
+                    --backend sglang \
+                    --base-url {args.base_url} \
+                    --port {port} \
+                    --model {args.model} \
+                    --dataset-name random \
+                    --dataset-path {args.dataset_path} \
+                    --num-prompts {bs} \
+                    --request-rate inf \
+                    --random-input-len 4096 \
+                    --random-output-len 1536 \
+                    --random-range-ratio 1 \
+                    --flush-cache \
+                    --seed 123 \
+                    --max-concurrency {bs / repeat_time}
+                """.format(args=args, port=port, bs=bs)
+                # os.system(command)
+                print(command)
+                result = subprocess.run(command, shell=True, capture_output=True, text=True)
+                # 从日志里面获取throughput
+                 # 打印终端输出
+                # print("标准输出:")
+                # print(result.stdout)
+
+                # 提取数字
+                pattern = r"Mean TPOT \(ms\):\s+([\d.]+)"
+                match = re.search(pattern, result.stdout)
+
+                if match:
+                    value = match.group(1)
+                    print(value)
+                    metrics[bs / repeat_time] = float(value)
+
+            print("TPOT (ms)：", metrics)
             final_metrics.append(metrics)
 
     elif args.eval_method == "tencent":
@@ -402,7 +429,6 @@ def main(args):
             print(tmp_metrics)
             raise Exception("请确认最大并发是否达到要求") 
 
-        # 腾讯的暂时不设置了
         command = """
         python3 -m sglang.bench_serving \
             --backend sglang \
