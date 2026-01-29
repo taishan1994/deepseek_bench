@@ -233,5 +233,5 @@ python3 -m sglang.bench_serving \
 
 - --request-rate: Number of requests per second. If this is inf, then all the requests are sent at time 0. Otherwise, we use Poisson process to synthesize the request arrival times. Default is inf.
 - --max-concurrency: Maximum number of concurrent requests. This can be used to help simulate an environment where a higher level component is enforcing a maximum number of concurrent requests. While the --request-rate argument controls the rate at which requests are initiated, this argument will control how many are actually allowed to execute at a time. This means that when used in combination, the actual  request rate may be lower than specified with --request-rate, if the server is not processing requests fast enough to keep up.
-- --num-prompts: 请求数
+- --num-prompts: 请求数，比如max-concurrency设置为8，num-prompts设置为80，那么就会发送80个请求，每次并发为8，相当于测了10次。
 

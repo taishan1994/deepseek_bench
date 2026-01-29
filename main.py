@@ -272,7 +272,7 @@ def main(args):
                 --model {args.model} \
                 --dataset-name random \
                 --dataset-path {args.dataset_path} \
-                --num-prompts 4096 \
+                --num-prompts 1000 \
                 --request-rate inf \
                 --random-input-len 4096 \
                 --random-output-len 1536 \
